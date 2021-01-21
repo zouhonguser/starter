@@ -16,7 +16,7 @@ import java.lang.reflect.Method;
 
 @DependsOn("asymmetricEncryptionAndDecryptionT")
 @Aspect
-public class AsymmetricEncryptionAndDecryptionAspect {
+public class AsymmetricEncryptionAndDecryptionAspect <T> {
 
     @Pointcut("execution (* org.zh.springbootstarterclay.asymmetricEncryptionAndDecryptionTools.AsymmetricEncryptionAndDecryption.*(..))")
     public void encryptObjectPointCut(){
@@ -32,23 +32,29 @@ public class AsymmetricEncryptionAndDecryptionAspect {
     private final String DECRYPT_OBJECT = "decryptObject";
 
     @Around("encryptObjectPointCut()")
-    public <T> Object encryptObjectPointCutAround(ProceedingJoinPoint joinPoint)  {
+    public Object encryptObjectPointCutAround(ProceedingJoinPoint joinPoint)  {
 
         MethodSignature methodSignature = (MethodSignature) joinPoint.getSignature();
         Method method = methodSignature.getMethod();
         //加密方法
         Object[] args = joinPoint.getArgs();
-        if(method.getName().equals(ENCRYPT_OBJECT)) {
-            Object arg = args[0];
-            if( arg instanceof String ) {
+        Object arg = args[0];
+        if( arg instanceof String ) {
+            if(method.getName().equals(ENCRYPT_OBJECT)) {
                 String encrypt = asymmetricEncryptionAndDecryptionT.encrypt(arg.toString());
                 args[0] = encrypt;
-            }else{
-                Class<T> aClass = (Class<T>) arg.getClass();
-                Field[] declaredFields = aClass.getDeclaredFields();
-                for(Field field : declaredFields) {
-                    //judge is have NeedAsymmetricEncryptionAndDecryption annotation
-                    if(field.isAnnotationPresent(NeedAsymmetricEncryptionAndDecryption.class)) {
+            }
+            if(method.getName().equals(DECRYPT_OBJECT)) {
+                String encrypt = asymmetricEncryptionAndDecryptionT.decrypt(arg.toString());
+                args[0] = encrypt;
+            }
+        }else{
+            Class<T> aClass = (Class<T>) arg.getClass();
+            Field[] declaredFields = aClass.getDeclaredFields();
+            for(Field field : declaredFields) {
+                //judge is have NeedAsymmetricEncryptionAndDecryption annotation
+                if(field.isAnnotationPresent(NeedAsymmetricEncryptionAndDecryption.class)) {
+                    if(field.getGenericType().toString().equals("class java.lang.String")) {
                         String fieldName = field.getName();
                         String getMethodName = splicingGetMethodName(fieldName);
                         String setMethodName = splicingSetMethodName(fieldName);
@@ -58,45 +64,19 @@ public class AsymmetricEncryptionAndDecryptionAspect {
                             method1.setAccessible(true);
                             String fieldValue = method1.invoke(arg,null).toString();
                             //Encryption of parameters
-                            aClass.getMethod(setMethodName, String.class).invoke(arg,asymmetricEncryptionAndDecryptionT.encrypt(fieldValue));
-                        } catch (IllegalAccessException e) {
-                            e.printStackTrace();
-                        } catch (InvocationTargetException e) {
-                            e.printStackTrace();
-                        } catch (NoSuchMethodException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            }
-        }
-        //解密方法
-        if(method.getName().equals(DECRYPT_OBJECT)) {
-            Object arg = args[0];
-            if( arg instanceof String ) {
-                String encrypt = asymmetricEncryptionAndDecryptionT.decrypt(arg.toString());
-                args[0] = encrypt;
-            }else{
-                Class<T> aClass = (Class<T>) arg.getClass();
-                Field[] declaredFields = aClass.getDeclaredFields();
-                for(Field field : declaredFields) {
-                    //judge is have NeedAsymmetricEncryptionAndDecryption annotation
-                    if(field.isAnnotationPresent(NeedAsymmetricEncryptionAndDecryption.class)) {
-                        String fieldName = field.getName();
-                        String getMethodName = splicingGetMethodName(fieldName);
-                        String setMethodName = splicingSetMethodName(fieldName);
-                        try {
-                            //Get parameters
-                            String fieldValue = aClass.getMethod(getMethodName).invoke(arg,null).toString();
-                            //Decryption of parameters
-                            aClass.getMethod(setMethodName, String.class).invoke(arg,asymmetricEncryptionAndDecryptionT.decrypt(fieldValue));
-                        } catch (IllegalAccessException e) {
-                            e.printStackTrace();
-                        } catch (InvocationTargetException e) {
-                            e.printStackTrace();
-                        } catch (NoSuchMethodException e) {
+                            if(method.getName().equals(ENCRYPT_OBJECT)) {
+                                aClass.getMethod(setMethodName, String.class).invoke(arg, asymmetricEncryptionAndDecryptionT.encrypt(fieldValue));
+                            }
+                            if(method.getName().equals(DECRYPT_OBJECT)) {
+                                aClass.getMethod(setMethodName, String.class).invoke(arg, asymmetricEncryptionAndDecryptionT.decrypt(fieldValue));
+                            }
+                        } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
                             e.printStackTrace();
                         }
+                    }else {
+                        throw new RuntimeException(
+                                "@NeedAsymmetricEncryptionAndDecryption can only be used on java.lang.String ,can not used on "+field
+                        );
                     }
                 }
             }
@@ -109,6 +89,8 @@ public class AsymmetricEncryptionAndDecryptionAspect {
         }
         return null;
     }
+
+
 
     /**
      * 根据字段名称拼接get方法名
