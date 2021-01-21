@@ -18,7 +18,7 @@
 
 是否开启非对称加密
 
-asymmetric-encryption-and-decryption.isOpen=true
+asymmetric-encryption-and-decryption.open=true
 
 非对称加密公钥
 
